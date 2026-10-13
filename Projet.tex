@@ -38,6 +38,17 @@
 }{% if KOMA class
   \KOMAoptions{parskip=half}}
 \makeatother
+\usepackage{longtable,booktabs,array}
+\newcounter{none} % for unnumbered tables
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
 \usepackage{graphicx}
 \makeatletter
 \newsavebox\pandoc@box
@@ -72,7 +83,7 @@
     % 2. Université et Titre
     \node (titre) [anchor=center, align=center] at ([yshift=4cm]current page.center) {
         {\Large\bfseries Université de Reims Champagne-Ardenne}\\[1.5cm]
-        {\Huge\bfseries Data Minning}\\[0.5cm]
+        {\Huge\bfseries Data Minning :  Quels clients faut-il cibler afin d'optimiser les offres promotionnelles et les rendre rentables, et quels offres faut-il exclure pour réduire nos coûts?}\\[0.5cm]
         {\Large\itshape Année 2026--2027}
     };
 
@@ -122,7 +133,7 @@
 
 \title{Projet Data Minning}
 \author{ALLET Estelle}
-\date{2026-10-12}
+\date{2026-10-13}
 
 \begin{document}
 \maketitle
@@ -131,5 +142,54 @@
 \PageDeGarde
 
 \newpage
+
+\section{Data Quality Card : Customer Personality
+Analysis}\label{data-quality-card-customer-personality-analysis}
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 2\tabcolsep) * \real{0.5000}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 2\tabcolsep) * \real{0.5000}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Question
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Réponse
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Unité d'observation & Un client de l'enseigne \\
+Source et licence & Kaggle, \emph{Customer Personality Analysis}
+(imakash3011) ; licence : CC0: Public Domain \\
+Période, population & Clients inscrits du 30/07/2012 au 29/06/2014 ;
+achats mesurés sur les 2 dernières années ; pays et mode de sélection
+non décrits \\
+Taille & 2 240 lignes × 29 colonnes (dont \texttt{ID}) ; \texttt{ID}
+unique \\
+Format & Séparateur tabulation ; \texttt{Dt\_Customer} en texte
+jour-mois-année, converti en date \\
+Valeurs manquantes & \texttt{Income} : 24 (1,1 \%) ; imputation par la
+médiane apprise sur le train \\
+Doublons & 182 lignes (8,1 \%) identiques à un autre client, \texttt{ID}
+mis à part : retirées. 19 groupes (40 lignes) identiques mais avec une
+\texttt{Response} différente : retirés \\
+Valeurs impossibles & \texttt{Year\_Birth} = 1893, 1899, 1900 (3 lignes)
+; \texttt{Income} = 666 666 (1 ligne, le suivant est 162 397) :
+retirées. 6 clients sans achat mais avec des montants positifs : gardés,
+signalés \\
+Modalités douteuses & \texttt{Marital\_Status} : Alone (3), YOLO (2),
+Absurd (2) ; Alone → Single, YOLO et Absurd → Autre. \texttt{Education}
+: « 2n Cycle » (203) et « Master » (370) regroupés \\
+Colonnes inutiles & \texttt{Z\_CostContact} (= 3) et \texttt{Z\_Revenue}
+(= 11) constantes : exclues des variables explicatives \\
+Variables sensibles & Âge (\texttt{Year\_Birth}), situation familiale :
+à discuter dans la Model Card. Aucune donnée identifiante \\
+Cible & À compléter selon la problématique \\
+Risque de fuite & À compléter selon la problématique \\
+Variables utiles attendues & À compléter selon la problématique \\
+\end{longtable}
+}
 
 \end{document}
