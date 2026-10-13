@@ -1,0 +1,46 @@
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{geometry}
+\usepackage{graphicx}
+
+\newcommand{\PageDeGarde}{
+\begin{titlepage}
+\begin{tikzpicture}[remember picture, overlay]
+    % 1. Fond PDF pleine page
+    \node[inner sep=0pt, anchor=center] at (current page.center) {
+        \includegraphics[page=1, width=\paperwidth, height=\paperheight]{fond_a4_sen_3.pdf}
+    };
+    
+    % 2. Université et Titre
+    \node (titre) [anchor=center, align=center] at ([yshift=4cm]current page.center) {
+        {\Large\bfseries Université de Reims Champagne-Ardenne}\\[1.5cm]
+        {\Huge\bfseries Data Minning}\\[0.5cm]
+        {\Large\itshape Année 2026--2027}
+    };
+
+    % 3. Logo placé exactement sous le bloc titre
+    \node [anchor=north, yshift=-0.8cm] at (titre.south) {
+        \includegraphics[width=4cm]{logo.png}
+    };
+\end{tikzpicture}
+
+% 4. Auteurs, Tuteur et Date
+\vspace*{15cm} % Ajuster cet espacement au besoin selon le logo
+\begin{center}
+    \begin{minipage}{0.85\textwidth}
+        \large
+        \textbf{Auteurs :}
+        \begin{itemize}
+            \item Maëlyss GREIN
+            \item Syrine SLIMAN
+            \item Hugo ROLAND
+            \item Estelle ALLET
+        \end{itemize}
+        \vspace{0.3cm}
+        \textbf{Encadrant :}  Mohamed TRIBAK \\
+        \textbf{Date :} \today
+    \end{minipage}
+\end{center}
+\end{titlepage}
+\newpage
+}

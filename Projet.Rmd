@@ -1,0 +1,28 @@
+---
+title: "Projet Data Minning "
+author: "ALLET Estelle"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    extra_dependencies: ["placeins"]
+    latex_engine: pdflatex
+    includes:
+      in_header: template.tex
+    keep_tex: true
+bibliography: biblio.bib
+notice: |
+  @*
+link-citations: yes
+geometry: margin=1.8cm
+fontsize: 12pt
+header-includes:
+  - \pagenumbering{arabic}
+  - \renewcommand{\maketitle}{}
+  - \usepackage{float}
+  - \usepackage{graphicx}
+---
+\thispagestyle{empty}
+\PageDeGarde
+
+\newpage
+
