@@ -12,6 +12,7 @@ DOSSIER_MODELES = RACINE / "modeles"
 
 # Tables SQLite
 TABLE_BRUTE = "brute"
+TABLE_SANS_DOUBLONS = "sans_doublons"
 TABLE_ANALYSE = "analyse"
 
 # Reproductibilité (split, validation croisée, k-means)
