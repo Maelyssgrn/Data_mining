@@ -7,8 +7,8 @@
 | Unité d'observation (une ligne = ?) | Un client de l'enseigne |
 | Source, licence, lien | Kaggle, *Customer Personality Analysis* (imakash3011), CC0: Public Domain, https://www.kaggle.com/datasets/imakash3011/customer-personality-analysis |
 | Période et population couvertes | Clients inscrits du 30/07/2012 au 29/06/2014 ; achats cumulés sur les 2 dernières années ; pays et devise inconnus |
-| Taille (lignes × colonnes) | Brut : 2 240 × 29 ; après nettoyage : 2 016 × 33 (table `analyse`) |
-| Cible : définition, construction, répartition | `Response` = 1 si le client a accepté l'offre de la dernière campagne ; fournie telle quelle ; 294 / 2 016 (14,6 %) |
+| Taille (lignes × colonnes) | Brut : 2 240 × 29 ; après nettoyage : 2 010 × 33 (table `analyse`) |
+| Cible : définition, construction, répartition | `Response` = 1 si le client a accepté l'offre de la dernière campagne ; fournie telle quelle ; 294 / 2 010 (14,6 %) |
 
 ## Défauts trouvés et ce qu'on en fait
 
@@ -19,7 +19,7 @@
 | Valeurs aberrantes ou impossibles | `Year_Birth` < 1901 : 3 ; `Income` = 666 666 : 1 (0,2 %) | Min / max et tri en SQL | Retirées : âge > 110 ans, revenu 4 fois supérieur au suivant |
 | Modalités qui jouent le rôle d'un manquant | `Marital_Status` YOLO, Absurd : 4 ; Alone : 3 | `GROUP BY Marital_Status` | YOLO, Absurd → Autre ; Alone → Single |
 | Classes déséquilibrées | 14,6 % de positifs | Répartition de `Response` | Split stratifié ; pas d'accuracy seule ; seuil fixé par le coût (3/11) |
-| Incohérences | 6 clients sans achat avec des montants > 0 (0,3 %) | Requête SQL sur `Num*` et `Mnt*` | Gardés, signalés : trop peu nombreux pour biaiser |
+| Incohérences | 6 clients sans achat avec des montants > 0 (0,3 %) | Requête SQL sur `Num*` et `Mnt*` | Retirés : fiches erronées (revenus extrêmes, dépense de 5 à 9) |
 | Colonnes constantes | `Z_CostContact` = 3, `Z_Revenue` = 11 | `COUNT(DISTINCT col) = 1` | Exclues des variables ; interprétées comme coût d'un contact et revenu d'une réponse (hypothèse, en UM) |
 
 ## Les pièges pour le modèle
