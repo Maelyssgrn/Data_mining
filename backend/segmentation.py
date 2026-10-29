@@ -6,7 +6,6 @@
 """
 
 import sqlite3
-from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")  # enregistre les figures sans ouvrir de fenêtre
@@ -18,16 +17,13 @@ from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 
-from backend import data
+from backend import config, data
 
-CHEMIN_DB = "data/clients.db"
-DOSSIER_FIGURES = Path("figures")
-DOSSIER_FIGURES.mkdir(exist_ok=True)
+config.DOSSIER_FIGURES.mkdir(parents=True, exist_ok=True)
 
 PRODUITS = {"MntWines": "Vin", "MntMeatProducts": "Viande", "MntFishProducts": "Poisson",
             "MntFruits": "Fruits", "MntSweetProducts": "Sucreries", "MntGoldProds": "Or"}
 NOMS = list(PRODUITS.values())
-GRAINE = 0
 
 
 
@@ -64,7 +60,7 @@ def graphique_eboulis(acp, nom_acp, fichier):
     ax.set(xlabel="Axe", ylabel="% de variance", title=f"{nom_acp} : variance expliquée")
     ax.legend()
     fig.tight_layout()
-    fig.savefig(DOSSIER_FIGURES / fichier, dpi=120)
+    fig.savefig(config.DOSSIER_FIGURES / fichier, dpi=120)
     plt.close(fig)
 
 
@@ -83,7 +79,7 @@ def graphique_cercle(corr, acp, nom_acp, fichier):
            xlabel=f"Axe 1 ({var[0]:.1f} %)", ylabel=f"Axe 2 ({var[1]:.1f} %)",
            title=f"{nom_acp} : cercle des corrélations")
     fig.tight_layout()
-    fig.savefig(DOSSIER_FIGURES / fichier, dpi=120)
+    fig.savefig(config.DOSSIER_FIGURES / fichier, dpi=120)
     plt.close(fig)
 
 
@@ -100,14 +96,14 @@ def graphique_individus(coords, clients, acp, nom_acp, fichier):
            title=f"{nom_acp} : projection des clients")
     ax.legend(markerscale=3)
     fig.tight_layout()
-    fig.savefig(DOSSIER_FIGURES / fichier, dpi=120)
+    fig.savefig(config.DOSSIER_FIGURES / fichier, dpi=120)
     plt.close(fig)
 
 
 def analyser_acp(donnees, clients, nom_acp, prefixe, n_axes):
     """Toute l'analyse d'une ACP, dans l'ordre. Renvoie l'ACP et les coordonnées des clients."""
     X = StandardScaler().fit_transform(donnees)
-    acp = PCA(random_state=GRAINE).fit(X)
+    acp = PCA(random_state=config.SEED).fit(X)
     coords = acp.transform(X)
 
     print("\n--- 1. Valeurs propres (critère de Kaiser : on garde > 1) ---")
@@ -170,11 +166,11 @@ print(profil_vin.to_string())
 # --- Types de paniers : K-means sur les 3 axes de l'ACP 2 ---
 print("\n--- 8. Types de paniers : choix du nombre de groupes (silhouette) ---")
 for k in range(2, 7):
-    km = KMeans(n_clusters=k, n_init=20, random_state=GRAINE).fit(coords2)
+    km = KMeans(n_clusters=k, n_init=20, random_state=config.SEED).fit(coords2)
     print(f"k = {k} : {silhouette_score(coords2, km.labels_):.3f}")
 
 K_PANIERS = 4
-clients["Panier"] = KMeans(n_clusters=K_PANIERS, n_init=20, random_state=GRAINE).fit_predict(coords2)
+clients["Panier"] = KMeans(n_clusters=K_PANIERS, n_init=20, random_state=config.SEED).fit_predict(coords2)
 
 types = (100 * parts.groupby(clients["Panier"]).mean()).round(1)
 types["clients"] = clients["Panier"].value_counts().sort_index()
@@ -193,14 +189,14 @@ ax.set(xlim=(0, 118), xlabel="% du panier", ylabel="Type de panier",
        title="Composition des types de paniers")
 ax.legend(ncol=6, fontsize=8, loc="upper center", bbox_to_anchor=(0.45, -0.18))
 fig.tight_layout()
-fig.savefig(DOSSIER_FIGURES / "acp2_types_paniers.png", dpi=120)
+fig.savefig(config.DOSSIER_FIGURES / "acp2_types_paniers.png", dpi=120)
 plt.close(fig)
 
 # Sauvegarde du type de panier de chaque client
-with sqlite3.connect(CHEMIN_DB) as con:
+with sqlite3.connect(config.CHEMIN_DB) as con:
     clients[["ID", "Panier"]].to_sql("paniers", con, if_exists="replace", index=False)
-print(f"\nTable 'paniers' (ID, Panier) écrite dans {CHEMIN_DB}")
-print(f"Graphiques enregistrés dans {DOSSIER_FIGURES}/")
+print(f"\nTable 'paniers' (ID, Panier) écrite dans {config.CHEMIN_DB}")
+print(f"Graphiques enregistrés dans {config.DOSSIER_FIGURES}")
 
 #ACP1:Le premier axe vaut 68% de l’information (valeur propre de 4,10). Le deuxième axe n’apporte que 11,2 %,
 # conservé pour l’interprétation. Les deux premiers axes résument ainsi 79,6 % de l’info.
