@@ -18,6 +18,8 @@ from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 
+from backend import data
+
 CHEMIN_DB = "data/clients.db"
 DOSSIER_FIGURES = Path("figures")
 DOSSIER_FIGURES.mkdir(exist_ok=True)
@@ -135,9 +137,8 @@ def analyser_acp(donnees, clients, nom_acp, prefixe, n_axes):
 
 
 
-with sqlite3.connect(CHEMIN_DB) as con:
-    clients = pd.read_sql("SELECT * FROM clients", con)
-clients = clients[clients["Mnt_total"] > 0].reset_index(drop=True)  # pas de panier vide
+clients = data.lire_analyse()  # table d'analyse nettoyée (recréée si besoin)
+clients = clients[clients["Depense_totale"] > 0].reset_index(drop=True)  # pas de panier vide
 print(f"{len(clients)} clients analysés")
 
 
@@ -153,7 +154,7 @@ acp1, coords1 = analyser_acp(montants, clients, "ACP des montants", "acp1_montan
 
 # ACP 2 : composition du panier
 titre("ACP 2 : COMPOSITION DU PANIER (part de chaque produit)")
-parts = clients[list(PRODUITS)].div(clients["Mnt_total"], axis=0).set_axis(NOMS, axis=1)
+parts = clients[list(PRODUITS)].div(clients["Depense_totale"], axis=0).set_axis(NOMS, axis=1)
 acp2, coords2 = analyser_acp(parts, clients, "ACP du panier", "acp2_panier", n_axes=3)
 # Rq : le dernier axe vaut 0 % car les parts somment à 100 %
 
@@ -177,7 +178,7 @@ clients["Panier"] = KMeans(n_clusters=K_PANIERS, n_init=20, random_state=GRAINE)
 
 types = (100 * parts.groupby(clients["Panier"]).mean()).round(1)
 types["clients"] = clients["Panier"].value_counts().sort_index()
-types["depense_med"] = clients.groupby("Panier")["Mnt_total"].median()
+types["depense_med"] = clients.groupby("Panier")["Depense_totale"].median()
 types["revenu_med"] = clients.groupby("Panier")["Income"].median()
 types["taux_reponse_%"] = (100 * clients.groupby("Panier")["Response"].mean()).round(1)
 print(f"\n--- 9. Les {K_PANIERS} types de paniers ---")
