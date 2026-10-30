@@ -40,4 +40,6 @@ FROM sans_doublons
 -- Valeurs impossibles. "Income IS NULL OR" est indispensable : en SQL, NULL <> 666666
 -- vaut NULL et non vrai, donc sans cette condition les 24 clients sans Income disparaîtraient.
 WHERE Year_Birth >= 1901
-  AND (Income IS NULL OR Income <> 666666);
+  AND (Income IS NULL OR Income <> 666666)
+  -- Fiches erronées : aucun achat mais des montants > 0 (6 clients)
+  AND NumWebPurchases + NumCatalogPurchases + NumStorePurchases > 0;

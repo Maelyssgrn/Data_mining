@@ -7,8 +7,8 @@
 | Unité d'observation (une ligne = ?) | Un client de l'enseigne |
 | Source, licence, lien | Kaggle, *Customer Personality Analysis* (imakash3011), CC0: Public Domain, https://www.kaggle.com/datasets/imakash3011/customer-personality-analysis |
 | Période et population couvertes | Clients inscrits du 30/07/2012 au 29/06/2014 ; achats cumulés sur les 2 dernières années ; pays et devise inconnus |
-| Taille (lignes × colonnes) | Brut : 2 240 × 29 ; après nettoyage : 2 016 × 33 (table `analyse`) |
-| Cible : définition, construction, répartition | `Response` = 1 si le client a accepté l'offre de la dernière campagne ; fournie telle quelle ; 294 / 2 016 (14,6 %) |
+| Taille (lignes × colonnes) | Brut : 2 240 × 29 ; après nettoyage : 2 010 × 33 (table `analyse`) |
+| Cible : définition, construction, répartition | `Response` = 1 si le client a accepté l'offre de la dernière campagne ; fournie telle quelle ; 294 / 2 010 (14,6 %) |
 
 ## Défauts trouvés et ce qu'on en fait
 
@@ -16,10 +16,10 @@
 |---|---|---|---|
 | Valeurs manquantes | `Income` : 24 (1,1 %) | `SUM(col IS NULL)` en SQL | Gardées ; médiane apprise sur le train, pour éviter une fuite |
 | Doublons | 182 (8,1 %), dont 40 lignes (19 groupes) en conflit sur `Response` | `GROUP BY ... HAVING COUNT(*) > 1` et `COUNT(DISTINCT Response) > 1` | Conflits retirés (vraie réponse inconnue), puis 180 doublons retirés : sinon un même client peut être dans le train et dans le test |
-| Valeurs aberrantes ou impossibles | `Year_Birth` < 1901 : 3 ; `Income` = 666 666 : 1 (0,2 %) | Min / max et tri en SQL | Retirées : âge > 110 ans, revenu 4 fois supérieur au suivant |
+| Valeurs aberrantes ou impossibles | `Year_Birth` < 1901 : 3 ; `Income` = 666 666 : 1 (0,2 %) ; 4 fiches suspectes (0,2 %) | Min / max et tri en SQL ; plan de l'ACP | Retirées : âge > 110 ans, revenu 4 fois supérieur au suivant. Suspectes (ID 1501, 4931, 5376, 8475 : ~100 % viande par catalogue, revenu ~157 000 ou 2 447) gardées, signalées |
 | Modalités qui jouent le rôle d'un manquant | `Marital_Status` YOLO, Absurd : 4 ; Alone : 3 | `GROUP BY Marital_Status` | YOLO, Absurd → Autre ; Alone → Single |
 | Classes déséquilibrées | 14,6 % de positifs | Répartition de `Response` | Split stratifié ; pas d'accuracy seule ; seuil fixé par le coût (3/11) |
-| Incohérences | 6 clients sans achat avec des montants > 0 (0,3 %) | Requête SQL sur `Num*` et `Mnt*` | Gardés, signalés : trop peu nombreux pour biaiser |
+| Incohérences | 6 clients sans achat avec des montants > 0 (0,3 %) | Requête SQL sur `Num*` et `Mnt*` | Retirés : fiches erronées (revenus extrêmes, dépense de 5 à 9) |
 | Colonnes constantes | `Z_CostContact` = 3, `Z_Revenue` = 11 | `COUNT(DISTINCT col) = 1` | Exclues des variables ; interprétées comme coût d'un contact et revenu d'une réponse (hypothèse, en UM) |
 
 ## Les pièges pour le modèle
