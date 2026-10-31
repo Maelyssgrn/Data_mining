@@ -1,0 +1,14 @@
+# Thème de l'application : clair, accents pastel, texte foncé et lisible
+[theme]
+base = "light"
+primaryColor = "#8E7CC3"
+backgroundColor = "#FBFAF8"
+secondaryBackgroundColor = "#F1EEF9"
+textColor = "#2E2A35"
+# Police un peu plus grande que la valeur par défaut (16) : démo projetée
+baseFontSize = 17
+baseRadius = "medium"
+
+[browser]
+# Pas de statistiques d'usage envoyées à Streamlit
+gatherUsageStats = false

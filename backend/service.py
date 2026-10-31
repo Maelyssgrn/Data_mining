@@ -17,19 +17,20 @@ MESSAGE_ABSENT = "Le modèle n'est pas encore entraîné. Lancer : python -m bac
 
 # Figures de docs/figures/ affichées dans l'écran Exploration (le plan de l'ACP est
 # redessiné par le frontend aux couleurs des personas, son PNG n'est pas repris).
-# Les chiffres des explications viennent de python -m backend.segmentation.
+# {plan} et {taille} sont remplis par le calcul (figures) ; le texte, lui, est
+# rédigé à partir des résultats de python -m backend.segmentation.
 FIGURES = [
     ("choix_k.png", "Choix du nombre de segments",
      "L'inertie baisse nettement jusqu'à k = 3, puis se tasse (coude) ; la silhouette reste "
      "proche de son maximum. k = 3 donne trois profils lisibles pour le marketing."),
     ("acp_segmentation_eboulis.png", "Variance expliquée par les axes de l'ACP",
-     "Les deux premiers axes résument 49 % de l'information des 11 variables de segmentation."),
+     "Les deux premiers axes résument {plan} % de l'information des 11 variables de segmentation."),
     ("acp_segmentation_cercle.png", "Cercle des corrélations : variables de segmentation",
      "Axe 1 : clients aisés, vin et catalogue, contre petits paniers variés (poisson, fruits, "
      "sucreries, or). Axe 2 : familles avec enfants, vin et web, contre catalogue et viande."),
     ("acp_montants_cercle.png", "Cercle des corrélations : montants bruts",
-     "Tous les montants vont dans le même sens sur l'axe 1 (56 % de la variance) : c'est un "
-     "effet taille. Segmenter sur les montants trierait les clients par niveau de dépense ; "
+     "Tous les montants vont dans le même sens sur l'axe 1 ({taille} % de la variance) : c'est "
+     "un effet taille. Segmenter sur les montants trierait les clients par niveau de dépense ; "
      "c'est pourquoi la segmentation utilise les parts."),
 ]
 
@@ -56,6 +57,13 @@ def _segmentation():
     segments = segmentation.segmenter(X)
     noms = {s: nom for s, (_, nom, _) in segmentation.noms_segments(X, segments).items()}
     return X, segments, segments.map(noms)
+
+
+@lru_cache(maxsize=1)
+def _acp_segmentation():
+    """ACP des 11 variables de segmentation : valeurs propres et coordonnées des clients."""
+    vp, _, _, coords = segmentation.acp_segmentation(_segmentation()[0])
+    return vp, coords
 
 
 # Fonctions appelées par le frontend
@@ -106,15 +114,20 @@ def personas():
 def plan_acp():
     """Coordonnées des clients sur les axes 1 et 2 de l'ACP, avec leur persona,
     et la part de variance (%) de ces deux axes (pour titrer le graphique)."""
-    X, _, noms = _segmentation()
-    vp, _, _, coords = segmentation.acp_segmentation(X)
-    coords["persona"] = noms
+    vp, coords = _acp_segmentation()
+    coords = coords.copy()  # ne pas modifier le résultat mis en cache
+    coords["persona"] = _segmentation()[2]
     return coords, vp["variance_%"].head(2).tolist()
 
 
 def figures():
-    """(titre, chemin, explication) de chaque figure de docs/figures/ à afficher."""
-    return [(titre, config.DOSSIER_FIGURES / fichier, explication)
+    """(titre, chemin, explication) de chaque figure de docs/figures/ à afficher.
+    Les pourcentages des explications viennent des ACP, pas d'un texte figé."""
+    vp = _acp_segmentation()[0]
+    vp_montants = segmentation.acp_montants()[0]
+    chiffres = {"plan": f"{vp['cumulee_%'].iloc[1]:.0f}",
+                "taille": f"{vp_montants['variance_%'].iloc[0]:.0f}"}
+    return [(titre, config.DOSSIER_FIGURES / fichier, explication.format(**chiffres))
             for fichier, titre, explication in FIGURES]
 
 
