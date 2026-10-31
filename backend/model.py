@@ -1,13 +1,15 @@
 """Modèles, seuil de décision et métriques métier."""
 
+import numpy as np
 import pandas as pd
 from sklearn.base import clone
 from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
+from sklearn.inspection import permutation_importance
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import average_precision_score
-from sklearn.model_selection import StratifiedKFold, train_test_split
+from sklearn.metrics import average_precision_score, make_scorer
+from sklearn.model_selection import GridSearchCV, StratifiedKFold, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
@@ -63,6 +65,31 @@ def besoin_client(df):
     }, orient="index").rename_axis("strategie")
 
 
+def _gain_au_seuil(y, p):
+    """Gain net (UM) si l'on contacte les clients de probabilité p > seuil de rentabilité."""
+    contacter = np.asarray(p) > SEUIL_RENTABILITE
+    return gain_net(int(contacter.sum()), int(np.asarray(y)[contacter].sum()))
+
+
+# Critère de réglage : le gain net au seuil (scorer sklearn, sur les probabilités)
+SCORER_GAIN = make_scorer(_gain_au_seuil, response_method="predict_proba")
+
+# Grilles de réglage (préfixe "classification__" : étape du pipeline).
+# n_estimators n'est pas réglé (fixé à 500) : plus d'arbres ne fait pas surapprendre,
+# cela stabilise seulement les probabilités.
+GRILLES = {
+    "Régression logistique": {"classification__C": [0.01, 0.03, 0.1, 0.3, 1, 3, 10]},
+    "Random Forest": {"classification__max_depth": [3, 5, 8, None],
+                      "classification__min_samples_leaf": [1, 5, 10, 20],
+                      "classification__max_features": ["sqrt", 0.5]},
+}
+
+
+def _plis():
+    """Les mêmes 5 plis stratifiés partout (réglage, comparaison, baseline)."""
+    return StratifiedKFold(n_splits=5, shuffle=True, random_state=config.SEED)
+
+
 def separer(df):
     """Split 80/20 stratifié : le test est réservé à l'évaluation finale.
     Renvoie les lignes complètes (train, test) : la baseline a besoin de colonnes
@@ -96,9 +123,38 @@ def construire_modeles():
             ("classification", LogisticRegression(max_iter=1000, random_state=config.SEED))]),
         "Random Forest": Pipeline([
             ("preparation", _preprocesseur()),
-            ("classification", RandomForestClassifier(n_estimators=100, random_state=config.SEED,
-                                                      n_jobs=-1))]),
+            # Pas de class_weight="balanced" : il déformerait les probabilités,
+            # et la règle p > 3/11 ne serait plus justifiée.
+            ("classification", RandomForestClassifier(n_estimators=500, oob_score=True,
+                                                      random_state=config.SEED, n_jobs=-1))]),
     }
+
+
+def regler(modeles, train):
+    """GridSearchCV sur le train : meilleur gain net moyen (refit="gain"), AP à côté.
+    Chaque recherche est ensuite réentraînée sur tout le train avec son meilleur réglage."""
+    recherches = {}
+    for nom, modele in modeles.items():
+        recherche = GridSearchCV(modele, GRILLES[nom], cv=_plis(), n_jobs=-1, refit="gain",
+                                 scoring={"gain": SCORER_GAIN, "ap": "average_precision"})
+        recherches[nom] = recherche.fit(variables(train), train["Response"])
+    return recherches
+
+
+def choisir(cv, simple="Régression logistique"):
+    """Règle de choix : le meilleur gain net moyen en validation croisée, sauf si son
+    écart avec le modèle simple est inférieur à un écart-type : on garde alors le simple.
+    cv : les lignes des modèles dans le tableau de comparer_cv."""
+    meilleur = cv["gain_moyen"].idxmax()
+    if meilleur == simple:
+        return simple, "meilleur gain net moyen en validation croisée"
+    ecart = cv.loc[meilleur, "gain_moyen"] - cv.loc[simple, "gain_moyen"]
+    ecart_type = cv.loc[meilleur, "gain_ecart_type"]
+    if ecart < ecart_type:
+        return simple, (f"{meilleur} gagne {ecart:.1f} UM de plus, moins qu'un écart-type "
+                        f"({ecart_type:.1f}) : on garde le modèle le plus simple")
+    return meilleur, (f"{meilleur} gagne {ecart:.1f} UM de plus, plus qu'un écart-type "
+                      f"({ecart_type:.1f})")
 
 
 def contacter_si_rentable(modele, df):
@@ -111,9 +167,8 @@ def comparer_cv(modeles, train):
     """Validation croisée stratifiée (5 plis) sur le train seulement.
     Pour chaque pli : Average Precision des modèles, et gain net au seuil de
     rentabilité des modèles et de la baseline (même pli de validation)."""
-    plis = StratifiedKFold(n_splits=5, shuffle=True, random_state=config.SEED)
     lignes = []
-    for i_app, i_val in plis.split(train, train["Response"]):
+    for i_app, i_val in _plis().split(train, train["Response"]):
         app, val = train.iloc[i_app], train.iloc[i_val]
         for nom, modele in modeles.items():
             # clone : un modèle neuf par pli, prétraitements appris sur ce pli seulement
@@ -139,6 +194,33 @@ def comparer_strategies(modeles, test):
     return pd.DataFrame.from_dict(
         {nom: bilan_campagne(c, test["Response"]) for nom, c in strategies.items()},
         orient="index").rename_axis("strategie")
+
+
+def _ap_et_gain(y, p):
+    """Average Precision et gain pour 100 clients (comparable entre jeux de tailles différentes)."""
+    return {"ap": average_precision_score(y, p),
+            "gain_pour_100": 100 * _gain_au_seuil(y, p) / len(y), "n_clients": len(y)}
+
+
+def oob_contre_test(foret, train, test):
+    """Score OOB (chaque client du train jugé par les arbres qui ne l'ont pas vu) contre test.
+    oob_score_ de sklearn est une accuracy, inutile ici : on repart des probabilités OOB."""
+    p_oob = foret[-1].oob_decision_function_[:, 1]
+    p_test = foret.predict_proba(variables(test))[:, 1]
+    return pd.DataFrame.from_dict({"OOB (train)": _ap_et_gain(train["Response"], p_oob),
+                                   "Test": _ap_et_gain(test["Response"], p_test)},
+                                  orient="index").rename_axis("jeu")
+
+
+def importance_permutation(modele, test, n=10):
+    """Baisse de l'Average Precision sur le test quand on mélange une variable d'origine.
+    Une importance mesure ce que le modèle utilise, pas une cause."""
+    r = permutation_importance(modele, variables(test), test["Response"],
+                               scoring="average_precision", n_repeats=30,
+                               random_state=config.SEED, n_jobs=-1)
+    return (pd.DataFrame({"variable": variables(test).columns,
+                          "baisse_ap": r.importances_mean, "ecart_type": r.importances_std})
+            .sort_values("baisse_ap", ascending=False).head(n))
 
 
 if __name__ == "__main__":
