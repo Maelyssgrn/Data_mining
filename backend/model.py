@@ -1,8 +1,21 @@
 """Modèles, seuil de décision et métriques métier."""
 
 import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from backend import config
+
+# Variables explicatives (ni Response, ni ID, ni Z_, ni segment du k-means)
+VARIABLES_NUMERIQUES = ["Age", "Income", "Enfants", "MntWines", "Recency",
+                        "Nb_achats", "Anciennete_jours"]
+VARIABLES_CATEGORIELLES = ["Education"]
 
 # Contacter un client de probabilité de réponse p rapporte en moyenne
 # p * REVENU_REPONSE - COUT_CONTACT : c'est positif si p > 3 / 11 = 27,3 %.
@@ -37,6 +50,53 @@ def besoin_client(df):
         "Tout le monde": bilan_campagne(tous, df["Response"]),
         "Déjà accepté une campagne": bilan_campagne(regle_deja_accepte(df), df["Response"]),
     }, orient="index").rename_axis("strategie")
+
+
+def separer(df):
+    """Split 80/20 stratifié : le test est réservé à l'évaluation finale."""
+    X = df[VARIABLES_NUMERIQUES + VARIABLES_CATEGORIELLES]
+    return train_test_split(X, df["Response"], test_size=0.2,
+                            random_state=config.SEED, stratify=df["Response"])
+
+
+def _preprocesseur():
+    """Imputation et encodage, appris sur le train seulement (dans le pipeline)."""
+    numerique = Pipeline([("imputation", SimpleImputer(strategy="median")),
+                          ("standardisation", StandardScaler())])
+    categoriel = Pipeline([("imputation", SimpleImputer(strategy="most_frequent")),
+                           ("encodage", OneHotEncoder(handle_unknown="ignore", drop="first"))])
+    return ColumnTransformer([("numerique", numerique, VARIABLES_NUMERIQUES),
+                              ("categoriel", categoriel, VARIABLES_CATEGORIELLES)])
+
+
+def construire_modeles():
+    """Les modèles comparés, chacun avec son propre préprocesseur."""
+    return {
+        "Régression logistique": Pipeline([
+            ("preparation", _preprocesseur()),
+            ("classification", LogisticRegression(max_iter=1000, random_state=config.SEED))]),
+        "Random Forest": Pipeline([
+            ("preparation", _preprocesseur()),
+            ("classification", RandomForestClassifier(n_estimators=100, random_state=config.SEED,
+                                                      n_jobs=-1))]),
+    }
+
+
+def comparer_cv(modeles, X_train, y_train):
+    """Validation croisée stratifiée (5 plis) sur le train, score : Average Precision."""
+    plis = StratifiedKFold(n_splits=5, shuffle=True, random_state=config.SEED)
+    resultats = {}
+    for nom, modele in modeles.items():
+        scores = cross_val_score(modele, X_train, y_train, cv=plis, scoring="average_precision")
+        resultats[nom] = {"ap_moyenne": scores.mean(), "ap_ecart_type": scores.std()}
+    return pd.DataFrame.from_dict(resultats, orient="index").rename_axis("modele")
+
+
+def evaluer(modele, X_test, y_test):
+    """Évaluation finale sur le test, faite une seule fois (seuil 0,5 de predict pour l'instant)."""
+    y_pred = modele.predict(X_test)
+    return {"matrice_confusion": confusion_matrix(y_test, y_pred),
+            "rapport": classification_report(y_test, y_pred, zero_division=0)}
 
 
 if __name__ == "__main__":
