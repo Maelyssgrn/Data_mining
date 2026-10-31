@@ -223,6 +223,32 @@ def importance_permutation(modele, test, n=10):
             .sort_values("baisse_ap", ascending=False).head(n))
 
 
+# Tranches d'âge de la vérification d'équité (55-64 et 65+ regroupés : 16 clients
+# de 65 ans et plus dans le test, trop peu pour un taux)
+TRANCHES_AGE = [0, 35, 45, 55, 200]
+NOMS_TRANCHES = ["< 35 ans", "35-44 ans", "45-54 ans", "55 ans et +"]
+
+
+def equite(modele, test):
+    """Par situation familiale et tranche d'âge (sur le test) : taux de réponse réel du
+    groupe, taux de contact par le modèle, et taux de réponse parmi les contactés.
+    Un groupe plus contacté doit aussi répondre plus, sinon c'est un signal d'alerte."""
+    contacter = contacter_si_rentable(modele, test)
+    groupes = {"Situation familiale": test["Marital_Status"],
+               "Tranche d'âge": pd.cut(test["Age"], TRANCHES_AGE, right=False,
+                                       labels=NOMS_TRANCHES)}
+    lignes = []
+    for variable, groupe in groupes.items():
+        for nom, index in groupe.groupby(groupe, observed=True).groups.items():
+            bilan = bilan_campagne(contacter[index], test.loc[index, "Response"])
+            lignes.append({"variable": variable, "groupe": nom, "n_clients": len(index),
+                           "taux_reponse_groupe_pct": round(100 * test.loc[index, "Response"].mean(), 1),
+                           "taux_contact_pct": round(100 * bilan["n_contactes"] / len(index), 1),
+                           "n_contactes": bilan["n_contactes"],
+                           "taux_reponse_contactes_pct": bilan["taux_pct"]})
+    return pd.DataFrame(lignes)
+
+
 if __name__ == "__main__":
     from backend import data
     print(f"Seuil de rentabilité : {SEUIL_RENTABILITE:.1%}")

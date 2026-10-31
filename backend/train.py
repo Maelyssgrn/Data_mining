@@ -36,6 +36,9 @@ def main():
     # Importance = ce que le modèle utilise pour classer, pas une cause de la réponse
     data.afficher(f"Importance par permutation sur le test ({retenu}, baisse d'AP)",
                   model.importance_permutation(modeles[retenu], test).round(4))
+    # Équité (variables sensibles) : comparer le taux de contact au taux de réponse
+    # réel du groupe. Groupes petits : lecture descriptive, sans test statistique.
+    data.afficher(f"Équité sur le test ({retenu})", model.equite(modeles[retenu], test))
 
     config.DOSSIER_MODELES.mkdir(exist_ok=True)
     joblib.dump(modeles[retenu], config.CHEMIN_MODELE)

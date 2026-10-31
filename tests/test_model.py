@@ -1,10 +1,12 @@
 """Tests de la logique métier : règle de décision de backend/model.py
 (contacter si p > 3/11 : un contact coûte 3 UM, une réponse rapporte 11 UM)."""
 
+import joblib
+import numpy as np
 import pandas as pd
 import pytest
 
-from backend import data, model
+from backend import config, data, model
 
 
 def test_seuil_rentabilite():
@@ -38,3 +40,42 @@ def test_campagne_de_masse_et_baseline():
     assert besoin.loc["Tout le monde", "gain_net"] == -2796
     baseline = besoin.loc["Déjà accepté une campagne"]
     assert (baseline["n_contactes"], baseline["n_reponses"], baseline["gain_net"]) == (416, 168, 600)
+
+
+@pytest.mark.parametrize("gain_foret, gain_logistique, ecart_type, attendu", [
+    (162.2, 159.6, 30.4, "Régression logistique"),  # nos chiffres : écart < 1 écart-type
+    (200.0, 150.0, 30.0, "Random Forest"),          # écart > 1 écart-type : la forêt l'emporte
+])
+def test_choisir_garde_le_modele_simple(gain_foret, gain_logistique, ecart_type, attendu):
+    cv = pd.DataFrame({"gain_moyen": [gain_logistique, gain_foret],
+                       "gain_ecart_type": [25.0, ecart_type]},
+                      index=["Régression logistique", "Random Forest"])
+    assert model.choisir(cv)[0] == attendu
+
+
+class ProbasFixees:
+    """Faux modèle : renvoie des probabilités choisies, pour tester la règle seule."""
+    def __init__(self, p):
+        self.p = np.array(p)
+
+    def predict_proba(self, X):
+        return np.column_stack([1 - self.p, self.p])
+
+
+@pytest.mark.parametrize("p, attendu", [
+    ([0.10, 0.20, 0.27], [False, False, False]),       # tous sous 3/11 : personne
+    ([0.10, 0.28, 3 / 11], [False, True, False]),      # p = 3/11 : gain nul, pas de contact
+])
+def test_contacter_si_rentable(p, attendu):
+    clients = data.lire_analyse().head(3)
+    assert model.contacter_si_rentable(ProbasFixees(p), clients).tolist() == attendu
+
+
+def test_modele_sauvegarde():
+    assert config.CHEMIN_MODELE.exists(), "lancer d'abord python -m backend.train"
+    modele = joblib.load(config.CHEMIN_MODELE)
+    _, test = model.separer(data.lire_analyse())
+    # Échoue aussi si le modèle a été entraîné avec d'autres variables (modèle périmé)
+    p = modele.predict_proba(model.variables(test))[:, 1]
+    assert len(p) == len(test)
+    assert ((p >= 0) & (p <= 1)).all()
