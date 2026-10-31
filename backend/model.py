@@ -155,11 +155,12 @@ def choisir(cv, simple="Régression logistique"):
         return simple, "meilleur gain net moyen en validation croisée"
     ecart = cv.loc[meilleur, "gain_moyen"] - cv.loc[simple, "gain_moyen"]
     ecart_type = cv.loc[meilleur, "gain_ecart_type"]
+    # Virgule décimale : la phrase est affichée telle quelle dans l'application
+    e, et = f"{ecart:.1f}".replace(".", ","), f"{ecart_type:.1f}".replace(".", ",")
     if ecart < ecart_type:
-        return simple, (f"{meilleur} gagne {ecart:.1f} UM de plus, moins qu'un écart-type "
-                        f"({ecart_type:.1f}) : on garde le modèle le plus simple")
-    return meilleur, (f"{meilleur} gagne {ecart:.1f} UM de plus, plus qu'un écart-type "
-                      f"({ecart_type:.1f})")
+        return simple, (f"{meilleur} gagne {e} UM de plus, moins qu'un écart-type "
+                        f"({et}) : on garde le modèle le plus simple")
+    return meilleur, f"{meilleur} gagne {e} UM de plus, plus qu'un écart-type ({et})"
 
 
 def contacter_si_rentable(modele, df):
