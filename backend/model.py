@@ -41,6 +41,11 @@ def gain_net(n_contactes, n_reponses):
     return n_reponses * config.REVENU_REPONSE - n_contactes * config.COUT_CONTACT
 
 
+def gain_attendu(p):
+    """Gain moyen (UM) de contacter un client de probabilité de réponse p : p x 11 - 3."""
+    return p * config.REVENU_REPONSE - config.COUT_CONTACT
+
+
 def regle_deja_accepte(df):
     """Baseline : contacter les clients ayant déjà accepté au moins une campagne."""
     return df["Nb_campagnes_acceptees"] > 0

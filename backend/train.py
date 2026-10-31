@@ -1,4 +1,5 @@
-"""Règle les modèles, choisit le meilleur par validation croisée et le sauvegarde.
+"""Règle les modèles, choisit le meilleur par validation croisée et le sauvegarde,
+avec les tableaux de résultats (relus par service.py, sans réentraîner).
 
 Lancement : python -m backend.train
 """
@@ -14,10 +15,11 @@ def main():
 
     # Réglage par GridSearchCV sur le train (critère : gain net moyen au seuil)
     recherches = model.regler(model.construire_modeles(), train)
+    reglages = {nom: {k.removeprefix("classification__"): v for k, v in r.best_params_.items()}
+                for nom, r in recherches.items()}
     print("\n=== Meilleurs réglages (validation croisée, train) ===")
-    for nom, recherche in recherches.items():
-        reglages = {k.removeprefix("classification__"): v for k, v in recherche.best_params_.items()}
-        print(f"{nom} : {reglages}")
+    for nom, r in reglages.items():
+        print(f"{nom} : {r}")
     modeles = {nom: recherche.best_estimator_ for nom, recherche in recherches.items()}
 
     # Comparaison sur les mêmes plis, avec la baseline, puis choix du modèle
@@ -28,21 +30,29 @@ def main():
 
     # Évaluation finale, une seule fois, sur le test. Le modèle retenu ne change plus,
     # même si l'autre fait mieux ici : ce serait choisir le modèle sur le test.
-    print(f"\nTest : {len(test)} clients, dont {int(test['Response'].sum())} répondants")
+    resultats = {
+        "reglages": reglages, "cv": cv, "retenu": retenu, "raison": raison,
+        "n_test": len(test), "n_repondants_test": int(test["Response"].sum()),
+        "strategies": model.comparer_strategies(modeles, test),
+        "oob": model.oob_contre_test(modeles["Random Forest"], train, test),
+        # Importance = ce que le modèle utilise pour classer, pas une cause de la réponse
+        "importance": model.importance_permutation(modeles[retenu], test),
+        # Équité (variables sensibles) : comparer le taux de contact au taux de réponse
+        # réel du groupe. Groupes petits : lecture descriptive, sans test statistique.
+        "equite": model.equite(modeles[retenu], test),
+    }
+    print(f"\nTest : {resultats['n_test']} clients, dont {resultats['n_repondants_test']} répondants")
     data.afficher(f"Stratégies sur le test (contacter si p > {model.SEUIL_RENTABILITE:.1%})",
-                  model.comparer_strategies(modeles, test).reset_index())
-    data.afficher("Random Forest : OOB contre test",
-                  model.oob_contre_test(modeles["Random Forest"], train, test).round(3).reset_index())
-    # Importance = ce que le modèle utilise pour classer, pas une cause de la réponse
+                  resultats["strategies"].reset_index())
+    data.afficher("Random Forest : OOB contre test", resultats["oob"].round(3).reset_index())
     data.afficher(f"Importance par permutation sur le test ({retenu}, baisse d'AP)",
-                  model.importance_permutation(modeles[retenu], test).round(4))
-    # Équité (variables sensibles) : comparer le taux de contact au taux de réponse
-    # réel du groupe. Groupes petits : lecture descriptive, sans test statistique.
-    data.afficher(f"Équité sur le test ({retenu})", model.equite(modeles[retenu], test))
+                  resultats["importance"].round(4))
+    data.afficher(f"Équité sur le test ({retenu})", resultats["equite"])
 
     config.DOSSIER_MODELES.mkdir(exist_ok=True)
     joblib.dump(modeles[retenu], config.CHEMIN_MODELE)
-    print(f"\nModèle sauvegardé : {config.CHEMIN_MODELE}")
+    joblib.dump(resultats, config.CHEMIN_RESULTATS)
+    print(f"\nModèle et résultats sauvegardés dans {config.DOSSIER_MODELES}")
 
 
 if __name__ == "__main__":
