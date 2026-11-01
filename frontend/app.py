@@ -5,6 +5,7 @@ Lancement (depuis la racine du dépôt) : python -m streamlit run frontend/app.p
 """
 
 import colorsys
+import math
 import re
 
 import altair as alt
@@ -19,7 +20,6 @@ CONTACTER = "#A8D5BA"          # vert sauge : contacter, gain positif
 NE_PAS_CONTACTER = "#E2A58C"   # terracotta : ne pas contacter, gain négatif
 SEUIL = "#2E2A35"              # ligne du seuil de rentabilité
 TEXTE = "#2E2A35"
-FOND_JAUGE = "#E6E1F2"
 GRILLE = "#ECE8F3"
 COULEURS_PERSONAS = {
     "Familles modestes au panier varié": "#A3C1D9",    # bleu
@@ -53,6 +53,9 @@ st.markdown("""
 .carte {border-radius: 18px; padding: 1.3rem 1.6rem; color: #2E2A35; margin-bottom: 0.8rem;}
 .carte .verdict {font-size: 2.1rem; font-weight: 700; margin: 0 0 0.3rem 0;}
 .carte p {margin: 0.2rem 0; font-size: 1.05rem;}
+/* Cartes des personas côte à côte : une grille CSS donne la même hauteur aux trois */
+.personas {display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 0.8rem;}
+.personas .carte {margin-bottom: 0;}
 .pastille {display: inline-block; padding: 0.35rem 0.95rem; border-radius: 999px;
            font-weight: 600; color: #2E2A35;}
 </style>
@@ -67,8 +70,8 @@ def contour(couleur, facteur=0.55):
 
 
 # Mise en forme : nombres à la française, espaces insécables (pas de « 27,3 » en fin
-# de ligne et « % » au début de la suivante)
-INSECABLE = " "   # avant % et UM
+# de ligne et « % » au début de la suivante, ni « : » en début de ligne)
+INSECABLE = " "   # avant %, UM, :, ;, ? et !
 FINE = " "        # séparateur des milliers
 
 
@@ -86,8 +89,10 @@ def um(x, decimales=2):
 
 
 def insecable(texte):
-    """Textes venus du backend (actions, raison, limites) : espace insécable avant % et UM."""
-    return re.sub(r"(\d) (%|UM)", rf"\1{INSECABLE}\2", texte)
+    """Typographie française de tous les textes affichés : espace insécable avant % et UM
+    (après un nombre) et avant : ; ? ! (aucun signe ne se retrouve en début de ligne)."""
+    texte = re.sub(r"(\d) (%|UM)", rf"\1{INSECABLE}\2", texte)
+    return re.sub(r" ([:;?!])", rf"{INSECABLE}\1", texte)
 
 
 def style(graphique):
@@ -136,7 +141,7 @@ def echelle_personas(contours=False):
 def exiger_modele():
     """Arrête l'écran avec un message clair si le modèle n'a pas été entraîné."""
     if not service.modele_disponible():
-        st.error("Le modèle n'est pas encore entraîné. Lancer, depuis la racine du dépôt :")
+        st.error(insecable("Le modèle n'est pas encore entraîné. Lancer, depuis la racine du dépôt :"))
         st.code("python -m backend.train", language="bash")
         st.stop()
 
@@ -145,27 +150,27 @@ def exiger_modele():
 
 def jauge(p, seuil, couleur):
     """Barre horizontale de la probabilité, avec le seuil de rentabilité en pointillés.
-    Hauteur 120 px : le libellé du seuil en haut (y = 4 à 22), la barre de y = 30 à 70."""
-    axe = alt.Axis(title="Probabilité de réponse", values=[0, 0.25, 0.5, 0.75, 1],
-                   labelExpr=f"format(datum.value * 100, '.0f') + '{INSECABLE}%'")
+    Positions verticales relatives (de 0 à 1, axe masqué) : la jauge garde ses proportions
+    quelle que soit la taille donnée par Streamlit, et l'axe reste sous la barre."""
+    axe = alt.Axis(title="Probabilité de réponse", values=[0, 0.25, 0.5, 0.75, 1], grid=False,
+                   ticks=True, labelExpr=f"format(datum.value * 100, '.0f') + '{INSECABLE}%'")
     x = alt.X("x:Q", scale=alt.Scale(domain=[0, 1]), axis=axe)
-    # Barres de 0 à x (x2) et de y = 30 à 70 px
-    position = {"x": x, "x2": alt.datum(0), "y": alt.value(30), "y2": alt.value(70)}
-    fond = alt.Chart(pd.DataFrame({"x": [1]})).mark_bar(
-        color=FOND_JAUGE, cornerRadius=10).encode(**position)
-    barre = alt.Chart(pd.DataFrame({"x": [p]})).mark_bar(
-        color=couleur, stroke=contour(couleur), strokeWidth=1.5, cornerRadius=10).encode(**position)
+    y = alt.Y("y:Q", scale=alt.Scale(domain=[0, 1]), axis=None)
+    # Barre de 0 à p (sans fond derrière), de y = 0,1 à 0,6
+    barre = alt.Chart(pd.DataFrame({"x": [p], "y": [0.1], "y2": [0.6]})).mark_bar(
+        color=couleur, stroke=contour(couleur), strokeWidth=1.5, cornerRadius=10).encode(
+        x=x, x2=alt.datum(0), y=y, y2="y2:Q")
     # Seuil dessiné après la barre (donc par-dessus), sur toute sa hauteur et au-delà
-    trait = alt.Chart(pd.DataFrame({"x": [seuil]})).mark_rule(
-        color=SEUIL, strokeDash=[6, 3], strokeWidth=3).encode(x=x, y=alt.value(24), y2=alt.value(76))
-    texte = alt.Chart(pd.DataFrame({"x": [seuil], "t": [f"seuil {pourcent(seuil)}"]})).mark_text(
-        align="left", baseline="top", dx=6, fontSize=15, color=SEUIL).encode(
-        x=x, y=alt.value(4), text="t:N")
-    return style((fond + barre + trait + texte).properties(height=120))
+    trait = alt.Chart(pd.DataFrame({"x": [seuil], "y": [0.02], "y2": [0.7]})).mark_rule(
+        color=SEUIL, strokeDash=[6, 3], strokeWidth=3).encode(x=x, y=y, y2="y2:Q")
+    texte = alt.Chart(pd.DataFrame({"x": [seuil], "y": [0.75], "t": [f"seuil {pourcent(seuil)}"]})
+                      ).mark_text(align="left", baseline="bottom", dx=6, fontSize=15,
+                                  color=SEUIL).encode(x=x, y=y, text="t:N")
+    return style((barre + trait + texte).properties(height=110))
 
 
 def ecran_decision(parametres):
-    st.title("Décision : faut-il contacter ce client ?")
+    st.title(insecable("Décision : faut-il contacter ce client ?"))
     exiger_modele()
     seuil = parametres["seuil"]
 
@@ -179,8 +184,8 @@ def ecran_decision(parametres):
     id_client = st.selectbox(
         f"Client ({len(clients)} clients, du plus probable au moins probable)", clients.index,
         format_func=lambda i: f"Client {i}  ·  probabilité {pourcent(clients.loc[i, 'probabilite'])}")
-    st.caption("Seuls les 402 clients du jeu de test sont proposés : le modèle n'a pas vu leur "
-               "réponse pendant l'entraînement, sa probabilité est donc honnête.")
+    st.caption(insecable("Seuls les 402 clients du jeu de test sont proposés : le modèle n'a pas "
+                         "vu leur réponse pendant l'entraînement, sa probabilité est donc honnête."))
 
     d = service.decision_client(id_client)
     p, gain = d["probabilite"], d["gain_attendu"]
@@ -190,14 +195,14 @@ def ecran_decision(parametres):
 
     gauche, droite = st.columns([3, 2], gap="large")
     with gauche:
-        st.markdown(f"""
+        st.markdown(insecable(f"""
         <div class="carte" style="background:{couleur}">
           <div class="verdict">{verdict}</div>
           <p>Probabilité de réponse : <b>{pourcent(p)}</b>, {position} du seuil de
              rentabilité ({pourcent(seuil)}).</p>
           <p>Gain attendu d'un contact : {nombre(p, 3)} × {parametres['revenu_reponse']}
              − {parametres['cout_contact']} = <b>{um(gain)}</b></p>
-        </div>""", unsafe_allow_html=True)
+        </div>"""), unsafe_allow_html=True)
         st.altair_chart(jauge(p, seuil, couleur), width="stretch")
     with droite:
         st.markdown("**Persona du client**")
@@ -205,7 +210,7 @@ def ecran_decision(parametres):
         st.markdown(f'<span class="pastille" style="background:'
                     f'{COULEURS_PERSONAS.get(d["persona"], GRILLE)}">{d["persona"]}</span>',
                     unsafe_allow_html=True)
-        st.caption(f"Pour l'ensemble du segment : {insecable(actions[d['persona']])}")
+        st.caption(insecable(f"Pour l'ensemble du segment : {actions[d['persona']]}"))
         st.metric("Probabilité de réponse", pourcent(p), border=True)
         st.metric("Gain attendu d'un contact", um(gain), border=True)
 
@@ -231,26 +236,27 @@ def ecran_decision(parametres):
 # Écran Exploration
 
 def carte_strategie(colonne, titre, bilan):
-    colonne.metric(titre, um(bilan["gain_net"], 0), border=True)
+    colonne.metric(insecable(titre), um(bilan["gain_net"], 0), border=True)
     colonne.caption(f"{nombre(bilan['n_contactes'])} clients contactés · "
                     f"{pourcent(bilan['taux_pct'] / 100)} de réponse")
 
 
-def carte_persona(colonne, persona):
+def carte_persona(persona):
+    """HTML d'une carte : une information par ligne, toujours dans le même ordre."""
     couleur = COULEURS_PERSONAS.get(persona["nom"], GRILLE)
-    colonne.markdown(f"""
+    return insecable(f"""
     <div class="carte" style="background:{couleur}">
       <div style="font-size:1.35rem; font-weight:700; margin-bottom:0.4rem">{persona['nom']}</div>
-      <p><b>{nombre(persona['n_clients'])}</b> clients · revenu médian
-         <b>{um(persona['revenu_median'], 0).lstrip('+')}</b></p>
-      <p>{pourcent(persona['avec_enfants_%'] / 100, 0)} avec enfants · dépense médiane
-         {um(persona['depense_mediane'], 0).lstrip('+')}</p>
-      <p>Produits : {insecable(persona['produits_principaux'])}</p>
-      <p>Canaux : {insecable(persona['canaux_principaux'])}</p>
+      <p><b>{nombre(persona['n_clients'])}</b> clients</p>
+      <p>Revenu médian : <b>{um(persona['revenu_median'], 0).lstrip('+')}</b></p>
+      <p>Dépense médiane : {um(persona['depense_mediane'], 0).lstrip('+')}</p>
+      <p>Avec enfants : {pourcent(persona['avec_enfants_%'] / 100, 0)}</p>
+      <p>Produits principaux : {persona['produits_principaux']}</p>
+      <p>Canaux principaux : {persona['canaux_principaux']}</p>
       <p style="font-size:1.25rem; margin-top:0.5rem">Taux de réponse :
          <b>{pourcent(persona['taux_reponse_%'] / 100)}</b></p>
-      <p><i>{insecable(persona['action'])}</i></p>
-    </div>""", unsafe_allow_html=True)
+      <p><i>{persona['action']}</i></p>
+    </div>""")
 
 
 def graphique_reponse_personas(table, seuil):
@@ -279,9 +285,10 @@ def graphique_plan(coords, variance):
     """Clients sur les deux premiers axes de l'ACP, colorés par persona."""
     donnees = coords.reset_index()
     return style(alt.Chart(donnees).mark_circle(size=42, opacity=0.9, strokeWidth=0.8).encode(
-        x=alt.X("Axe 1:Q", title=f"Axe 1 ({pourcent(variance[0] / 100)}) : aisés, vin, catalogue",
+        x=alt.X("Axe 1:Q", title=insecable(f"Axe 1 ({pourcent(variance[0] / 100)}) : aisés, vin, "
+                                           "catalogue"),
                 axis=alt.Axis(format=".0f", tickMinStep=1)),
-        y=alt.Y("Axe 2:Q", title=f"Axe 2 ({pourcent(variance[1] / 100)}) : familles, web",
+        y=alt.Y("Axe 2:Q", title=insecable(f"Axe 2 ({pourcent(variance[1] / 100)}) : familles, web"),
                 axis=alt.Axis(format=".0f", tickMinStep=1)),
         color=alt.Color("persona:N", scale=echelle_personas(), title="Persona",
                         legend=alt.Legend(orient="bottom", direction="vertical")),
@@ -292,42 +299,49 @@ def graphique_plan(coords, variance):
 
 
 def ecran_exploration(parametres):
-    st.title("Exploration : quels profils de clients ?")
+    st.title(insecable("Exploration : quels profils de clients ?"))
 
-    st.subheader("Le besoin : contacter tout le monde fait perdre de l'argent")
+    st.subheader(insecable("Le besoin : contacter tout le monde fait perdre de l'argent"))
     besoin = service.besoin_client()
     tous, baseline = besoin.loc["Tout le monde"], besoin.loc["Déjà accepté une campagne"]
     g, d = st.columns(2, gap="large")
     carte_strategie(g, "Contacter tout le monde", tous)
     carte_strategie(d, "Contacter ceux qui ont déjà accepté une campagne", baseline)
-    st.markdown(f"Seuls **{pourcent(tous['taux_pct'] / 100)}** des clients répondent, sous le seuil "
-                f"de rentabilité de **{pourcent(parametres['seuil'])}** : une campagne de masse "
-                f"perd {um(-tous['gain_net'], 0).lstrip('+')} sur les {nombre(tous['n_contactes'])} "
-                "clients. Une règle simple fait déjà gagner de l'argent.")
+    # Chiffres calculés (besoin_client et seuil), pas écrits à la main
+    st.markdown(insecable(
+        f"Contacter tout le monde fait perdre {nombre(-tous['gain_net'])} UM : seuls "
+        f"{pourcent(tous['taux_pct'] / 100)} des clients répondent, alors qu'il en faudrait au "
+        f"moins {pourcent(parametres['seuil'])} pour couvrir le coût des contacts. En ne "
+        "contactant que les clients qui ont déjà accepté une campagne, on gagne déjà "
+        f"{nombre(baseline['gain_net'])} UM."))
 
     st.subheader("Trois personas")
     table = charger_personas()
-    for colonne, (_, persona) in zip(st.columns(len(table), gap="medium"), table.iterrows()):
-        carte_persona(colonne, persona)
+    # Les trois cartes dans une même grille CSS : même hauteur, même si l'une est moins remplie
+    st.markdown('<div class="personas">' + "".join(carte_persona(p) for _, p in table.iterrows())
+                + "</div>", unsafe_allow_html=True)
     st.altair_chart(graphique_reponse_personas(table, parametres["seuil"]), width="stretch")
-    st.caption("Aucun segment n'atteint le seuil : contacter un segment entier n'est pas "
-               "rentable. Il faut cibler client par client (écran Décision).")
+    st.caption(insecable("Aucun segment n'atteint le seuil : contacter un segment entier n'est "
+                         "pas rentable. Il faut cibler client par client (écran Décision)."))
 
     st.subheader("Les clients sur le plan de l'ACP")
     coords, variance = charger_plan_acp()
     st.altair_chart(graphique_plan(coords, variance), width="stretch")
-    st.caption("Les segments se recouvrent : les clients forment un continuum plutôt que des "
-               "groupes bien séparés (silhouette faible, environ 0,2).")
+    st.caption(insecable("Sur ce graphique, les trois groupes se chevauchent : il n'y a pas de "
+                         "frontière nette entre les profils, on passe progressivement de l'un à "
+                         "l'autre. Les personas décrivent des tendances, pas des catégories "
+                         "étanches."))
 
-    with st.expander("Méthode : comment les segments ont été construits"):
-        st.write("k-means sur 11 variables : revenu, enfants, part de chaque produit dans la "
-                 "dépense du client et part de chaque canal dans ses achats. La réponse à la "
-                 "campagne n'est pas utilisée pour construire les segments.")
+    with st.expander(insecable("Méthode : comment les segments ont été construits")):
+        st.write(insecable("k-means sur 11 variables : revenu, enfants, part de chaque produit "
+                           "dans la dépense du client et part de chaque canal dans ses achats. "
+                           "La réponse à la campagne n'est pas utilisée pour construire les "
+                           "segments."))
         figures = charger_figures()
         for i in range(0, len(figures), 2):
             for colonne, (titre, chemin, explication) in zip(st.columns(2, gap="large"),
                                                              figures[i:i + 2]):
-                colonne.markdown(f"**{titre}**")
+                colonne.markdown(f"**{insecable(titre)}**")
                 colonne.image(str(chemin), width="stretch")
                 colonne.caption(insecable(explication))
 
@@ -399,15 +413,73 @@ def tableau(df, colonnes):
     st.dataframe(df.reset_index()[list(colonnes)].rename(columns=colonnes), hide_index=True)
 
 
+# Hyperparamètres affichés pour chaque modèle, avec leur rôle en une phrase simple
+# (les valeurs testées et retenues viennent du backend)
+ROLES = {
+    "Régression logistique": [
+        ("C", "Force de la régularisation : plus C est petit, plus les coefficients sont "
+              "tirés vers 0, donc plus le modèle est prudent."),
+        ("l1_ratio", "Type de pénalité : L2 réduit tous les coefficients sans en annuler "
+                     "aucun."),
+        ("solver", "Algorithme qui calcule les coefficients (lbfgs, celui par défaut de "
+                   "scikit-learn)."),
+    ],
+    "Random Forest": [
+        ("n_estimators", "Nombre d'arbres. Fixé à 500 : plus d'arbres ne fait pas "
+                         "surapprendre, cela stabilise seulement les probabilités ; il est "
+                         "donc inutile de le régler."),
+        ("max_depth", "Profondeur maximale d'un arbre : nombre de questions posées à la "
+                      "suite sur un client."),
+        ("min_samples_leaf", "Nombre minimal de clients dans une feuille : évite les règles "
+                             "tirées de très peu de clients."),
+        ("max_features", "Nombre de variables tirées au hasard à chaque coupure : rend les "
+                         "arbres différents entre eux."),
+        ("oob_score", "Chaque arbre est évalué sur les clients qu'il n'a pas tirés (hors du "
+                      "sac) : une estimation de l'erreur sans toucher au test."),
+        ("random_state", "Graine du hasard : les résultats sont reproductibles."),
+    ],
+}
+
+
+def valeur(v, nom=""):
+    """Valeur d'un hyperparamètre en français."""
+    if nom == "l1_ratio":
+        return "L2" if v == 0 else f"mélange L1/L2 ({v})"
+    if v is None:
+        return "aucune limite"
+    if isinstance(v, bool):
+        return "oui" if v else "non"
+    if v == "sqrt":
+        return "racine carrée du nombre de variables"
+    if nom == "max_features":
+        return f"{pourcent(v, 0)} des variables"
+    return str(v).replace(".", ",")
+
+
+def tableau_hyperparametres(nom, construits, grille, retenus):
+    """Une ligne par hyperparamètre : rôle, valeurs testées, valeur retenue."""
+    lignes = [{"Hyperparamètre": "pénalité (l1_ratio)" if p == "l1_ratio" else p,
+               "Ce qu'il fait": insecable(role),
+               # Séparateur « ; » : la virgule est déjà la virgule décimale (0,01 ; 0,03)
+               "Valeurs testées": insecable(" ; ".join(valeur(v, p) for v in grille[p]))
+               if p in grille
+               else "fixé, non réglé",
+               "Valeur retenue": valeur(retenus.get(p, construits[p]), p)}
+              for p, role in ROLES[nom]]
+    # st.table : le texte des cellules passe à la ligne au lieu d'être coupé
+    st.table(pd.DataFrame(lignes).set_index("Hyperparamètre"))
+
+
 def ecran_modele(parametres):
-    st.title("Modèle : que vaut le ciblage ?")
+    st.title(insecable("Modèle : que vaut le ciblage ?"))
     exiger_modele()
     r = charger_resultats()
     strategies, retenu = r["strategies"], r["retenu"]
 
     st.subheader("Sur des clients jamais vus pendant l'entraînement")
-    st.write(f"Jeu de test : {nombre(r['n_test'])} clients, dont {r['n_repondants_test']} "
-             f"répondants. Règle : contacter si la probabilité dépasse {pourcent(parametres['seuil'])}.")
+    st.write(insecable(f"Jeu de test : {nombre(r['n_test'])} clients, dont "
+                       f"{r['n_repondants_test']} répondants. Règle : contacter si la "
+                       f"probabilité dépasse {pourcent(parametres['seuil'])}."))
     colonnes = st.columns(3, gap="large")
     for colonne, (titre, ligne) in zip(colonnes, [
             (f"Modèle retenu ({retenu})", retenu),
@@ -420,32 +492,34 @@ def ecran_modele(parametres):
                          "n_reponses": "Réponses", "taux_pct": "Taux de réponse (%)",
                          "gain_net": "Gain net (UM)"})
 
-    st.subheader("Choix du modèle : validation croisée sur l'entraînement")
+    st.subheader(insecable("Choix du modèle : validation croisée sur l'entraînement"))
     tableau(r["cv"].round({"ap_moyenne": 3, "ap_ecart_type": 3, "gain_moyen": 1,
                            "gain_ecart_type": 1}),
             {"strategie": "Stratégie", "gain_moyen": "Gain net moyen par pli (UM)",
              "gain_ecart_type": "Écart-type du gain", "ap_moyenne": "Average Precision",
              "ap_ecart_type": "Écart-type de l'AP"})
-    st.info(f"Modèle retenu : **{retenu}**. {insecable(r['raison'])}.")
+    st.info(insecable(f"Modèle retenu : **{retenu}**. {r['raison']}."))
 
     st.subheader("Variables importantes")
     st.altair_chart(graphique_importance(r["importance"]), width="stretch")
-    st.caption("Mesurée sur le test : plus la baisse est grande, plus le modèle s'appuie sur la "
-               "variable pour classer les clients. Une importance n'est pas une cause, et des "
-               "variables liées entre elles se partagent l'importance.")
+    st.caption(insecable("Mesurée sur le test : plus la baisse est grande, plus le modèle "
+                         "s'appuie sur la variable pour classer les clients. Une importance "
+                         "n'est pas une cause, et des variables liées entre elles se partagent "
+                         "l'importance."))
 
-    st.subheader("Équité : âge et situation familiale")
+    st.subheader(insecable("Équité : âge et situation familiale"))
     equite = r["equite"]
     g, d = st.columns(2, gap="large")
     g.altair_chart(graphique_equite(equite, "Situation familiale"), width="stretch")
     d.altair_chart(graphique_equite(equite, "Tranche d'âge"), width="stretch")
     petits = equite[equite["n_contactes"] < 15]
-    st.write(f"Chaque groupe est contacté à peu près en proportion de sa réponse réelle, et "
-             f"parmi les contactés le taux de réponse est d'au moins "
-             f"**{pourcent(equite['taux_reponse_contactes_pct'].min() / 100)}** dans tous les "
-             f"groupes. Petits groupes, à lire avec prudence : "
-             + ", ".join(f"{SITUATIONS.get(g, g)} ({n} contactés)"
-                         for g, n in zip(petits["groupe"], petits["n_contactes"])) + ".")
+    st.write(insecable(
+        f"Chaque groupe est contacté à peu près en proportion de sa réponse réelle, et "
+        f"parmi les contactés le taux de réponse est d'au moins "
+        f"**{pourcent(equite['taux_reponse_contactes_pct'].min() / 100)}** dans tous les "
+        f"groupes. Petits groupes, à lire avec prudence : "
+        + ", ".join(f"{SITUATIONS.get(g, g)} ({n} contactés)"
+                    for g, n in zip(petits["groupe"], petits["n_contactes"])) + "."))
     with st.expander("Tableau d'équité"):
         tableau(equite.assign(groupe=equite["groupe"].map(lambda g: SITUATIONS.get(g, g))),
                 {"variable": "Variable", "groupe": "Groupe", "n_clients": "Clients",
@@ -457,12 +531,34 @@ def ecran_modele(parametres):
     st.markdown("\n".join(f"- {insecable(limite)}" for limite in service.limites()))
 
     with st.expander("Détails techniques"):
-        for nom, reglages in r["reglages"].items():
-            st.write(f"**{nom}** : " + ", ".join(f"`{k} = {v}`" for k, v in reglages.items()))
-        st.write("Random Forest : score hors du sac (OOB, sur l'entraînement) contre test.")
-        tableau(r["oob"].round(3), {"jeu": "Jeu", "ap": "Average Precision",
-                                    "gain_pour_100": "Gain pour 100 clients (UM)",
-                                    "n_clients": "Clients"})
+        construits, grilles, n_plis = service.hyperparametres()
+        for nom in ROLES:
+            st.markdown(f"**{nom}**")
+            tableau_hyperparametres(nom, construits[nom], grilles[nom], r["reglages"][nom])
+        # Nombre de combinaisons d'une grille : produit des nombres de valeurs testées
+        combinaisons = {nom: math.prod(len(v) for v in g.values()) for nom, g in grilles.items()}
+        total = sum(combinaisons.values())
+        st.markdown(insecable(
+            f"- **Critère de réglage** : gain net moyen en validation croisée sur "
+            f"l'entraînement ({n_plis} plis stratifiés), en contactant les clients dont la "
+            f"probabilité dépasse {pourcent(parametres['seuil'])}. L'Average Precision est "
+            "calculée à côté, pour information.\n"
+            f"- **Combinaisons testées** : "
+            + " ; ".join(f"{nom} : {n}" for nom, n in combinaisons.items())
+            + f". Soit {total} combinaisons, chacune entraînée sur les {n_plis} plis.\n"
+            "- **Règle de choix entre les deux modèles** : on prend le modèle au meilleur gain "
+            "net moyen, sauf si son avance sur la régression logistique est plus petite qu'un "
+            "écart-type du gain ; dans ce cas, on garde la régression logistique, plus simple "
+            f"à expliquer. {r['raison']}."))
+
+        st.write(insecable("Random Forest : score hors du sac (OOB, sur l'entraînement) "
+                           "contre test."))
+        # Nombres à la française, arrondis (0,612 ; 57,2)
+        oob = r["oob"].assign(ap=r["oob"]["ap"].map(lambda x: nombre(x, 3)),
+                              gain_pour_100=r["oob"]["gain_pour_100"].map(lambda x: nombre(x, 1)),
+                              n_clients=r["oob"]["n_clients"].map(nombre))
+        tableau(oob, {"jeu": "Jeu", "ap": "Average Precision",
+                      "gain_pour_100": "Gain pour 100 clients (UM)", "n_clients": "Clients"})
 
 
 # Navigation
@@ -470,10 +566,10 @@ def ecran_modele(parametres):
 parametres = service.parametres_metier()
 st.sidebar.title("Campagne marketing")
 ecran = st.sidebar.radio("Écran", ["Décision", "Exploration", "Modèle"])
-st.sidebar.caption(f"Règle de décision : contacter si la probabilité de réponse dépasse "
-                   f"{pourcent(parametres['seuil'])}. Un contact coûte "
-                   f"{parametres['cout_contact']}{INSECABLE}UM, une réponse rapporte "
-                   f"{parametres['revenu_reponse']}{INSECABLE}UM.")
+st.sidebar.caption(insecable(f"Règle de décision : contacter si la probabilité de réponse "
+                             f"dépasse {pourcent(parametres['seuil'])}. Un contact coûte "
+                             f"{parametres['cout_contact']} UM, une réponse rapporte "
+                             f"{parametres['revenu_reponse']} UM."))
 
 {"Décision": ecran_decision, "Exploration": ecran_exploration,
  "Modèle": ecran_modele}[ecran](parametres)

@@ -138,6 +138,17 @@ def resultats_modele():
     return joblib.load(config.CHEMIN_RESULTATS)
 
 
+def hyperparametres():
+    """Pour chaque modèle : ses paramètres (tels que construits) et les valeurs testées
+    dans sa grille, lus dans model.py (pas recopiés), et le nombre de plis de la CV."""
+    def sans_prefixe(d):
+        return {k.removeprefix("classification__"): v for k, v in d.items()
+                if k.startswith("classification__")}
+    parametres = {nom: sans_prefixe(m.get_params()) for nom, m in model.construire_modeles().items()}
+    grilles = {nom: sans_prefixe(g) for nom, g in model.GRILLES.items()}
+    return parametres, grilles, model._plis().get_n_splits()
+
+
 def limites():
     """Les limites, phrase par phrase, lues dans la ligne « Limites » de la Model Card
     (une seule source : si la card change, l'application suit)."""
