@@ -18,7 +18,8 @@ def app():
 
 def test_demarrage(app):
     assert not app.exception
-    assert app.sidebar.radio[0].options == list(ECRANS)
+    # Libellés affichés « icône Nom » : on vérifie les noms des 3 écrans
+    assert [o.split(" ", 1)[1] for o in app.sidebar.radio[0].options] == list(ECRANS)
 
 
 @pytest.mark.parametrize("ecran", ECRANS)

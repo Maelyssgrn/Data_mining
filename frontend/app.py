@@ -47,7 +47,14 @@ LIBELLES = {
     "Marital_Status": "Situation familiale",
 }
 
-st.set_page_config(page_title="Ciblage de campagne", layout="wide")
+# Icônes (emojis) : une icône par idée, la même partout
+ICONES_ECRANS = {"Décision": "🎯", "Exploration": "🔍", "Modèle": "📊"}
+ICONES_PERSONAS = {"Familles modestes au panier varié": "👨‍👩‍👧",
+                   "Familles amatrices de vin": "🍷",
+                   "Aisés, peu d'enfants, vin et viande": "💎"}
+GAIN = "💰"
+
+st.set_page_config(page_title="Ciblage de campagne", page_icon="📣", layout="wide")
 st.markdown("""
 <style>
 .carte {border-radius: 18px; padding: 1.3rem 1.6rem; color: #2E2A35; margin-bottom: 0.8rem;}
@@ -56,6 +63,10 @@ st.markdown("""
 /* Cartes des personas côte à côte : une grille CSS donne la même hauteur aux trois */
 .personas {display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 0.8rem;}
 .personas .carte {margin-bottom: 0;}
+/* Icône Material du verdict (la syntaxe :material/nom: n'est pas lue dans le HTML) :
+   même police d'icônes que Streamlit, couleur du texte */
+.icone {font-family: 'Material Symbols Rounded'; font-weight: normal; font-style: normal;
+        vertical-align: -0.15em; margin-right: 0.3rem;}
 .pastille {display: inline-block; padding: 0.35rem 0.95rem; border-radius: 999px;
            font-weight: 600; color: #2E2A35;}
 </style>
@@ -191,13 +202,14 @@ def ecran_decision(parametres):
     p, gain = d["probabilite"], d["gain_attendu"]
     couleur = CONTACTER if d["contacter"] else NE_PAS_CONTACTER
     verdict = "Contacter" if d["contacter"] else "Ne pas contacter"
+    icone = "check_circle" if d["contacter"] else "cancel"
     position = "au-dessus" if d["contacter"] else "en dessous"
 
     gauche, droite = st.columns([3, 2], gap="large")
     with gauche:
         st.markdown(insecable(f"""
         <div class="carte" style="background:{couleur}">
-          <div class="verdict">{verdict}</div>
+          <div class="verdict"><span class="icone">{icone}</span>{verdict}</div>
           <p>Probabilité de réponse : <b>{pourcent(p)}</b>, {position} du seuil de
              rentabilité ({pourcent(seuil)}).</p>
           <p>Gain attendu d'un contact : {nombre(p, 3)} × {parametres['revenu_reponse']}
@@ -212,7 +224,7 @@ def ecran_decision(parametres):
                     unsafe_allow_html=True)
         st.caption(insecable(f"Pour l'ensemble du segment : {actions[d['persona']]}"))
         st.metric("Probabilité de réponse", pourcent(p), border=True)
-        st.metric("Gain attendu d'un contact", um(gain), border=True)
+        st.metric(f"{GAIN} Gain attendu d'un contact", um(gain), border=True)
 
     st.subheader("Profil du client")
     profil = [("Âge", f"{d['Age']} ans"),
@@ -236,7 +248,7 @@ def ecran_decision(parametres):
 # Écran Exploration
 
 def carte_strategie(colonne, titre, bilan):
-    colonne.metric(insecable(titre), um(bilan["gain_net"], 0), border=True)
+    colonne.metric(f"{GAIN} {insecable(titre)}", um(bilan["gain_net"], 0), border=True)
     colonne.caption(f"{nombre(bilan['n_contactes'])} clients contactés · "
                     f"{pourcent(bilan['taux_pct'] / 100)} de réponse")
 
@@ -246,7 +258,8 @@ def carte_persona(persona):
     couleur = COULEURS_PERSONAS.get(persona["nom"], GRILLE)
     return insecable(f"""
     <div class="carte" style="background:{couleur}">
-      <div style="font-size:1.35rem; font-weight:700; margin-bottom:0.4rem">{persona['nom']}</div>
+      <div style="font-size:1.35rem; font-weight:700; margin-bottom:0.4rem">
+        {ICONES_PERSONAS.get(persona['nom'], '')} {persona['nom']}</div>
       <p><b>{nombre(persona['n_clients'])}</b> clients</p>
       <p>Revenu médian : <b>{um(persona['revenu_median'], 0).lstrip('+')}</b></p>
       <p>Dépense médiane : {um(persona['depense_mediane'], 0).lstrip('+')}</p>
@@ -499,14 +512,14 @@ def ecran_modele(parametres):
              "ap_ecart_type": "Écart-type de l'AP"})
     st.info(insecable(f"Modèle retenu : **{retenu}**. {r['raison']}."))
 
-    st.subheader("Variables importantes")
+    st.subheader("💡 Variables importantes")
     st.altair_chart(graphique_importance(r["importance"]), width="stretch")
     st.caption(insecable("Mesurée sur le test : plus la baisse est grande, plus le modèle "
                          "s'appuie sur la variable pour classer les clients. Une importance "
                          "n'est pas une cause, et des variables liées entre elles se partagent "
                          "l'importance."))
 
-    st.subheader(insecable("Équité : âge et situation familiale"))
+    st.subheader("⚖️ " + insecable("Équité : âge et situation familiale"))
     equite = r["equite"]
     g, d = st.columns(2, gap="large")
     g.altair_chart(graphique_equite(equite, "Situation familiale"), width="stretch")
@@ -526,10 +539,10 @@ def ecran_modele(parametres):
                  "taux_contact_pct": "Contactés (%)", "n_contactes": "Contactés",
                  "taux_reponse_contactes_pct": "Réponse parmi les contactés (%)"})
 
-    st.subheader("Limites")
+    st.subheader("⚠️ Limites")
     st.markdown("\n".join(f"- {insecable(limite)}" for limite in service.limites()))
 
-    with st.expander("Détails techniques"):
+    with st.expander("Détails techniques", icon="⚙️"):
         construits, grilles, n_plis = service.hyperparametres()
         for nom in ROLES:
             st.markdown(f"**{nom}**")
@@ -562,8 +575,9 @@ def ecran_modele(parametres):
 # Navigation
 
 parametres = service.parametres_metier()
-st.sidebar.title("Campagne marketing")
-ecran = st.sidebar.radio("Écran", ["Décision", "Exploration", "Modèle"])
+st.sidebar.title("📣 Campagne marketing")
+ecran = st.sidebar.radio("Écran", list(ICONES_ECRANS),
+                         format_func=lambda e: f"{ICONES_ECRANS[e]} {e}")
 st.sidebar.caption(insecable(f"Règle de décision : contacter si la probabilité de réponse "
                              f"dépasse {pourcent(parametres['seuil'])}. Un contact coûte "
                              f"{parametres['cout_contact']} UM, une réponse rapporte "
