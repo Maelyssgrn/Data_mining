@@ -10,6 +10,8 @@ CHEMIN_DB = RACINE / "data" / "clients.db"                      # régénérable
 DOSSIER_SQL = RACINE / "backend" / "sql"
 DOSSIER_MODELES = RACINE / "modeles"
 CHEMIN_MODELE = DOSSIER_MODELES / "modele.joblib"               # régénérable : python -m backend.train
+CHEMIN_RESULTATS = DOSSIER_MODELES / "resultats.joblib"         # tableaux de train.py, relus par service.py
+CHEMIN_MODEL_CARD = RACINE / "docs" / "model_card.md"           # source des limites affichées
 DOSSIER_FIGURES = RACINE / "docs" / "figures"                   # graphiques générés (ACP, segments)
 
 # Tables SQLite
