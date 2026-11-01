@@ -425,9 +425,8 @@ ROLES = {
                    "scikit-learn)."),
     ],
     "Random Forest": [
-        ("n_estimators", "Nombre d'arbres. Fixé à 500 : plus d'arbres ne fait pas "
-                         "surapprendre, cela stabilise seulement les probabilités ; il est "
-                         "donc inutile de le régler."),
+        ("n_estimators", "Nombre d'arbres : plus il y en a, plus les probabilités sont "
+                         "stables, mais plus le calcul est long."),
         ("max_depth", "Profondeur maximale d'un arbre : nombre de questions posées à la "
                       "suite sur un client."),
         ("min_samples_leaf", "Nombre minimal de clients dans une feuille : évite les règles "
@@ -546,10 +545,9 @@ def ecran_modele(parametres):
             f"- **Combinaisons testées** : "
             + " ; ".join(f"{nom} : {n}" for nom, n in combinaisons.items())
             + f". Soit {total} combinaisons, chacune entraînée sur les {n_plis} plis.\n"
-            "- **Règle de choix entre les deux modèles** : on prend le modèle au meilleur gain "
-            "net moyen, sauf si son avance sur la régression logistique est plus petite qu'un "
-            "écart-type du gain ; dans ce cas, on garde la régression logistique, plus simple "
-            f"à expliquer. {r['raison']}."))
+            "- **Règle de choix entre les deux modèles** : on retient le modèle au meilleur "
+            "gain net moyen en validation croisée ; le test ne sert jamais au choix. "
+            f"{r['raison']}."))
 
         st.write(insecable("Random Forest : score hors du sac (OOB, sur l'entraînement) "
                            "contre test."))
