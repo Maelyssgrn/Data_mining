@@ -43,10 +43,13 @@ def test_campagne_de_masse_et_baseline():
 
 
 @pytest.mark.parametrize("gain_foret, gain_logistique, ecart_type, attendu", [
-    (162.2, 159.6, 30.4, "Régression logistique"),  # nos chiffres : écart < 1 écart-type
-    (200.0, 150.0, 30.0, "Random Forest"),          # écart > 1 écart-type : la forêt l'emporte
+    # La forêt gagne de peu (écart < 1 écart-type) : elle est quand même retenue
+    # (l'ancienne règle « un écart-type » aurait gardé la régression logistique)
+    (162.2, 159.6, 30.4, "Random Forest"),
+    # La régression logistique a le meilleur gain : elle est retenue
+    (150.0, 170.0, 30.0, "Régression logistique"),
 ])
-def test_choisir_garde_le_modele_simple(gain_foret, gain_logistique, ecart_type, attendu):
+def test_choisir_meilleur_gain(gain_foret, gain_logistique, ecart_type, attendu):
     cv = pd.DataFrame({"gain_moyen": [gain_logistique, gain_foret],
                        "gain_ecart_type": [25.0, ecart_type]},
                       index=["Régression logistique", "Random Forest"])

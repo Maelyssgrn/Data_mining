@@ -22,7 +22,8 @@ def main():
         print(f"{nom} : {r}")
     modeles = {nom: recherche.best_estimator_ for nom, recherche in recherches.items()}
 
-    # Comparaison sur les mêmes plis, avec la baseline, puis choix du modèle
+    # Comparaison sur les mêmes plis, avec la baseline, puis choix du modèle au meilleur
+    # gain net moyen (la baseline n'entre pas dans le choix)
     cv = model.comparer_cv(modeles, train)
     data.afficher("Validation croisée (train, 5 plis)", cv.round(4).reset_index())
     retenu, raison = model.choisir(cv.loc[list(modeles)])
