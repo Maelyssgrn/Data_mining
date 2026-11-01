@@ -41,6 +41,11 @@ def gain_net(n_contactes, n_reponses):
     return n_reponses * config.REVENU_REPONSE - n_contactes * config.COUT_CONTACT
 
 
+def gain_attendu(p):
+    """Gain moyen (UM) de contacter un client de probabilité de réponse p : p x 11 - 3."""
+    return p * config.REVENU_REPONSE - config.COUT_CONTACT
+
+
 def regle_deja_accepte(df):
     """Baseline : contacter les clients ayant déjà accepté au moins une campagne."""
     return df["Nb_campagnes_acceptees"] > 0
@@ -75,11 +80,11 @@ def _gain_au_seuil(y, p):
 SCORER_GAIN = make_scorer(_gain_au_seuil, response_method="predict_proba")
 
 # Grilles de réglage (préfixe "classification__" : étape du pipeline).
-# n_estimators n'est pas réglé (fixé à 500) : plus d'arbres ne fait pas surapprendre,
-# cela stabilise seulement les probabilités.
+# Random Forest : 3 x 4 x 4 x 2 = 96 combinaisons.
 GRILLES = {
     "Régression logistique": {"classification__C": [0.01, 0.03, 0.1, 0.3, 1, 3, 10]},
-    "Random Forest": {"classification__max_depth": [3, 5, 8, None],
+    "Random Forest": {"classification__n_estimators": [100, 300, 500],
+                      "classification__max_depth": [3, 5, 8, None],
                       "classification__min_samples_leaf": [1, 5, 10, 20],
                       "classification__max_features": ["sqrt", 0.5]},
 }
@@ -141,20 +146,16 @@ def regler(modeles, train):
     return recherches
 
 
-def choisir(cv, simple="Régression logistique"):
-    """Règle de choix : le meilleur gain net moyen en validation croisée, sauf si son
-    écart avec le modèle simple est inférieur à un écart-type : on garde alors le simple.
+def choisir(cv):
+    """Règle de choix : le modèle au meilleur gain net moyen en validation croisée
+    (le gain est le critère du client). Le test ne sert jamais au choix.
     cv : les lignes des modèles dans le tableau de comparer_cv."""
-    meilleur = cv["gain_moyen"].idxmax()
-    if meilleur == simple:
-        return simple, "meilleur gain net moyen en validation croisée"
-    ecart = cv.loc[meilleur, "gain_moyen"] - cv.loc[simple, "gain_moyen"]
-    ecart_type = cv.loc[meilleur, "gain_ecart_type"]
-    if ecart < ecart_type:
-        return simple, (f"{meilleur} gagne {ecart:.1f} UM de plus, moins qu'un écart-type "
-                        f"({ecart_type:.1f}) : on garde le modèle le plus simple")
-    return meilleur, (f"{meilleur} gagne {ecart:.1f} UM de plus, plus qu'un écart-type "
-                      f"({ecart_type:.1f})")
+    gains = cv["gain_moyen"].sort_values(ascending=False)
+    meilleur, autre = gains.index[0], gains.index[1]
+    # Virgule décimale : la phrase est affichée telle quelle dans l'application
+    g, g_autre = (f"{gains[m]:.1f}".replace(".", ",") for m in (meilleur, autre))
+    return meilleur, (f"{meilleur} a le meilleur gain net moyen en validation croisée : "
+                      f"{g} UM par pli, contre {g_autre} pour {autre}")
 
 
 def contacter_si_rentable(modele, df):
