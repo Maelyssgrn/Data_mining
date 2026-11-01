@@ -9,6 +9,7 @@ CHEMIN_CSV = RACINE / "data" / "raw" / "marketing_campaign.csv"  # brut, jamais 
 CHEMIN_DB = RACINE / "data" / "clients.db"                      # régénérable depuis le CSV
 DOSSIER_SQL = RACINE / "backend" / "sql"
 DOSSIER_MODELES = RACINE / "modeles"
+CHEMIN_MODELE = DOSSIER_MODELES / "modele.joblib"               # régénérable : python -m backend.train
 DOSSIER_FIGURES = RACINE / "docs" / "figures"                   # graphiques générés (ACP, segments)
 
 # Tables SQLite
