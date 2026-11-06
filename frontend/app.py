@@ -57,18 +57,254 @@ GAIN = "💰"
 st.set_page_config(page_title="Ciblage de campagne", page_icon="📣", layout="wide")
 st.markdown("""
 <style>
-.carte {border-radius: 18px; padding: 1.3rem 1.6rem; color: #2E2A35; margin-bottom: 0.8rem;}
-.carte .verdict {font-size: 2.1rem; font-weight: 700; margin: 0 0 0.3rem 0;}
-.carte p {margin: 0.2rem 0; font-size: 1.05rem;}
-/* Cartes des personas côte à côte : une grille CSS donne la même hauteur aux trois */
-.personas {display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-bottom: 0.8rem;}
-.personas .carte {margin-bottom: 0;}
-/* Icône Material du verdict (la syntaxe :material/nom: n'est pas lue dans le HTML) :
-   même police d'icônes que Streamlit, couleur du texte */
-.icone {font-family: 'Material Symbols Rounded'; font-weight: normal; font-style: normal;
-        vertical-align: -0.15em; margin-right: 0.3rem;}
-.pastille {display: inline-block; padding: 0.35rem 0.95rem; border-radius: 999px;
-           font-weight: 600; color: #2E2A35;}
+:root {
+  --fond: #F7F3F1;
+  --fond-carte: #FFFCFB;
+  --fond-secondaire: #F2ECEA;
+  --sidebar: #4B1028;
+  --sidebar-hover: #6D2844;
+  --accent: #A0627C;
+  --accent-bord: #B97A93;
+  --texte-clair: #FFF7FB;
+  --ombre: 0 16px 34px rgba(63, 26, 43, 0.10);
+}
+
+html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
+  background: var(--fond);
+  color: #2E2A35;
+}
+
+[data-testid="stAppViewContainer"] {
+  background: var(--fond);
+}
+
+.block-container {
+  max-width: 1280px;
+  padding-top: 2rem;
+  padding-bottom: 3rem;
+}
+
+[data-testid="stHeader"] {
+  background: rgba(247, 243, 241, 0.85);
+}
+
+[data-testid="stSidebar"] {
+  background: linear-gradient(180deg, #4B1028 0%, #54112C 100%);
+  border-right: none;
+}
+
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"],
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] div {
+  color: var(--texte-clair);
+}
+
+[data-testid="stSidebar"] .sidebar-separator {
+  height: 1px;
+  background: rgba(255,255,255,0.18);
+  margin: 0.55rem 0 0.7rem 0;
+}
+
+.sidebar-card {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 1rem 1.1rem;
+  color: var(--texte-clair);
+  line-height: 1.6;
+  margin-top: 1rem;
+}
+
+/* radio de la sidebar */
+[data-testid="stSidebar"] [role="radiogroup"] {
+  gap: 0.55rem;
+}
+
+[data-testid="stSidebar"] [role="radiogroup"] > label {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  padding: 0.85rem 0.95rem;
+  transition: 0.2s ease;
+}
+
+[data-testid="stSidebar"] [role="radiogroup"] > label:hover {
+  background: rgba(255,255,255,0.06);
+}
+
+[data-testid="stSidebar"] [role="radiogroup"] > label[data-selected="true"] {
+  background: rgba(173, 113, 141, 0.38);
+  border-color: rgba(255,255,255,0.18);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+}
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(90deg, #57122C 0%, #6E1837 55%, #A85D73 100%);
+  color: #FFF6FB;
+  border-radius: 24px;
+  padding: 1.35rem 2rem;
+  min-height: 155px;
+  box-shadow: var(--ombre);
+  margin-bottom: 2.4rem;
+}
+
+.hero::after {
+  content: "";
+  position: absolute;
+  width: 320px;
+  height: 320px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.18);
+  right: -40px;
+  top: -120px;
+}
+
+.hero .sur-titre {
+  font-size: 0.76rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.82);
+  margin-bottom: 0.55rem;
+  font-weight: 700;
+}
+
+.hero .titre {
+  font-size: 2.1rem;
+  font-weight: 800;
+  line-height: 1.15;
+  margin-bottom: 0.55rem;
+}
+
+.hero .soustitre {
+  font-size: 1.05rem;
+  color: rgba(255,255,255,0.88);
+  max-width: 650px;
+}
+
+.hero .tag {
+  display: inline-block;
+  margin-top: 1rem;
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: #FFF6FB;
+  border-radius: 999px;
+  padding: 0.45rem 0.95rem;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+h1, h2, h3, h4 {
+  color: #342634;
+}
+
+h1 {
+  font-size: 2.2rem !important;
+  font-weight: 800 !important;
+  margin-bottom: 0.3rem;
+}
+
+[data-testid="stCaptionContainer"] {
+  color: #7C7480;
+}
+
+.carte {
+  border-radius: 20px;
+  padding: 1.35rem 1.6rem;
+  color: #2E2A35;
+  margin-bottom: 0.9rem;
+  box-shadow: 0 8px 22px rgba(71, 50, 67, 0.06);
+}
+
+.carte .verdict {
+  font-size: 2.1rem;
+  font-weight: 700;
+  margin: 0 0 0.45rem 0;
+}
+
+.carte p {
+  margin: 0.28rem 0;
+  font-size: 1.05rem;
+  line-height: 1.55;
+}
+
+.personas {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+}
+
+.personas .carte {
+  margin-bottom: 0;
+}
+
+.icone {
+  font-family: 'Material Symbols Rounded';
+  font-weight: normal;
+  font-style: normal;
+  vertical-align: -0.15em;
+  margin-right: 0.3rem;
+}
+
+.pastille {
+  display: inline-block;
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  font-weight: 700;
+  color: #4B3A2C;
+  border: 1px solid rgba(46,42,53,0.10);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+}
+
+[data-testid="stMetric"] {
+  background: var(--fond-carte);
+  border: 1px solid #E6DAD8;
+  border-radius: 18px;
+  padding: 1rem 1.15rem;
+  box-shadow: 0 8px 18px rgba(71, 50, 67, 0.05);
+}
+
+[data-testid="stMetricLabel"], [data-testid="stMetricValue"] {
+  color: #2E2A35;
+}
+
+.stAlert, [data-testid="stExpander"], [data-testid="stDataFrame"] {
+  border-radius: 18px;
+}
+
+div[data-baseweb="select"] > div,
+div[data-baseweb="base-input"] > div,
+[data-testid="stTextInputRootElement"] > div,
+[data-testid="stNumberInputRootElement"] > div {
+  background: #F3ECEE;
+  border: 1px solid #E7D6DE;
+  border-radius: 14px;
+}
+
+/* radios horizontaux de la page */
+[data-testid="stHorizontalBlock"] [role="radiogroup"] {
+  gap: 0.75rem;
+}
+
+[data-testid="stHorizontalBlock"] [role="radiogroup"] > label {
+  background: #FFFCFB;
+  border: 1px solid #E3D8D6;
+  border-radius: 14px;
+  padding: 0.7rem 1rem;
+}
+
+[data-testid="stHorizontalBlock"] [role="radiogroup"] > label[data-selected="true"] {
+  background: #F7EEF2;
+  border-color: #C48CA5;
+}
+
+@media (max-width: 980px) {
+  .personas {grid-template-columns: 1fr;}
+  .hero .titre {font-size: 1.7rem;}
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -82,8 +318,8 @@ def contour(couleur, facteur=0.55):
 
 # Mise en forme : nombres à la française, espaces insécables (pas de « 27,3 » en fin
 # de ligne et « % » au début de la suivante, ni « : » en début de ligne)
-INSECABLE = " "   # avant %, UM, :, ;, ? et !
-FINE = " "        # séparateur des milliers
+INSECABLE = " "   # avant %, UM, :, ;, ? et !
+FINE = " "        # séparateur des milliers
 
 
 def nombre(x, decimales=0):
@@ -155,6 +391,16 @@ def exiger_modele():
         st.error(insecable("Le modèle n'est pas encore entraîné. Lancer, depuis la racine du dépôt :"))
         st.code("python -m backend.train", language="bash")
         st.stop()
+
+
+def afficher_bandeau(parametres):
+    st.markdown(insecable(f"""
+    <div class="hero">
+      <div class="sur-titre">Ciblage de campagne · Décision, exploration et modèle</div>
+      <div class="titre">Ciblage de campagne</div>
+      <div class="soustitre">Règle de décision : contacter si la probabilité de réponse dépasse {pourcent(parametres['seuil'])}. Un contact coûte {parametres['cout_contact']} UM, une réponse rapporte {parametres['revenu_reponse']} UM.</div>
+    </div>
+    """), unsafe_allow_html=True)
 
 
 # Écran Décision
@@ -575,13 +821,17 @@ def ecran_modele(parametres):
 # Navigation
 
 parametres = service.parametres_metier()
-st.sidebar.title("📣 Campagne marketing")
+st.sidebar.markdown("<div style='font-size:2rem; margin-bottom:0.5rem'>📣</div>", unsafe_allow_html=True)
+st.sidebar.title("Campagne marketing")
+st.sidebar.markdown("<div class='sidebar-separator'></div>", unsafe_allow_html=True)
 ecran = st.sidebar.radio("Écran", list(ICONES_ECRANS),
                          format_func=lambda e: f"{ICONES_ECRANS[e]} {e}")
-st.sidebar.caption(insecable(f"Règle de décision : contacter si la probabilité de réponse "
-                             f"dépasse {pourcent(parametres['seuil'])}. Un contact coûte "
-                             f"{parametres['cout_contact']} UM, une réponse rapporte "
-                             f"{parametres['revenu_reponse']} UM."))
+st.sidebar.markdown(
+    insecable(f"""<div class='sidebar-card'>Règle de décision : contacter si la probabilité de réponse dépasse {pourcent(parametres['seuil'])}. Un contact coûte {parametres['cout_contact']} UM, une réponse rapporte {parametres['revenu_reponse']} UM.</div>"""),
+    unsafe_allow_html=True,
+)
+
+afficher_bandeau(parametres)
 
 {"Décision": ecran_decision, "Exploration": ecran_exploration,
  "Modèle": ecran_modele}[ecran](parametres)
